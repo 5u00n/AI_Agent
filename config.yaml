@@ -1,0 +1,48 @@
+llm:
+  provider: lmstudio
+  base_url_lmstudio: http://127.0.0.1:1234/v1
+  base_url_ollama: http://127.0.0.1:11434
+  api_key_lmstudio: lm-studio
+  api_key_ollama: ollama
+  model_planner: qwen/qwen3-coder-30b
+  model_executor: qwen/qwen3-coder-30b
+  model_verifier: qwen/qwen3-coder-30b
+  transport: openai_compatible
+  max_tokens: 4096
+budgets:
+  max_steps: 30
+  max_runtime_minutes: 60
+  max_tool_calls: 200
+safety:
+  require_approval_for:
+  - package_install
+  - file_delete_many
+  - push_code
+  - network_write
+  blocked_commands:
+  - sudo
+  - rm -rf /
+  - git reset --hard
+  allowed_paths:
+  - .
+test_policy:
+  enforce_task_test_gate: true
+  auto_generate_tests: true
+  verify_and_autocorrect_tests: true
+  run_tests_before_completion: true
+  delete_tests_after_task: true
+  keep_tests_when_user_requests: true
+  test_location_strategy: tests_temp
+  max_test_fix_attempts: 2
+  test_runner_by_mode:
+    coding: python
+    research: python
+    analysis: python
+    docs: python
+ui:
+  enabled: true
+  host: 127.0.0.1
+  port: 8000
+  auth_mode: none
+mcp:
+  servers: {}
