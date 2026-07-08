@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+
+# Environment variables
+.env
+
+# Graphify
+graphify-out/
+
+# IDEs / Editor
+.vscode/
+.idea/
+.DS_Store
+
+# Agent state
+state/
+tests_temp/
