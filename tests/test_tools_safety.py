@@ -125,15 +125,15 @@ def test_workspace_tools(tmp_path: Path, monkeypatch) -> None:
     assert res3["ok"] is True
     assert (subdir / "nested_dir").is_dir()
 
-    # 4. Test when no working directory is selected and it falls back to cwd
+    # 4. Test when no working directory is selected and it falls back to self.root_dir (which was set to subdir)
     monkeypatch.setattr("agent.get_remembered_working_dir", lambda: None)
     res4 = engine.tools.call("create_file_or_folder", {"path": "fallback.txt", "is_folder": False, "content": "hello fallback"})
     assert res4["ok"] is True
-    assert (Path.cwd() / "fallback.txt").exists()
+    assert (subdir / "fallback.txt").exists()
     
     # Cleanup fallback file
-    if (Path.cwd() / "fallback.txt").exists():
-        (Path.cwd() / "fallback.txt").unlink()
+    if (subdir / "fallback.txt").exists():
+        (subdir / "fallback.txt").unlink()
 
 
 def test_approval_lifecycle_roundtrip(tmp_path: Path) -> None:

@@ -33,7 +33,7 @@ test_policy:
   delete_tests_after_task: true
   keep_tests_when_user_requests: true
   test_location_strategy: tests_temp
-  max_test_fix_attempts: 4
+  max_test_fix_attempts: 6
   test_runner_by_mode:
     coding: python
     research: python

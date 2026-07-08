@@ -335,6 +335,11 @@ class LocalLLMClient:
             else:
                 system_prompt += (
                     " You must evaluate if the 'execution_result' successfully fulfilled the 'step' requirements."
+                    " Carefully inspect 'execution_result' (including any 'file_content' written or modified)."
+                    " Be constructive and practical: if the code is functional, correctly implements the requested logic,"
+                    " and achieves the step's goal, mark it as ok: true."
+                    " Do not reject the result for minor formatting differences or choice of loops (e.g., using while instead of for) "
+                    " as long as the functionality is correct and satisfies the step requirements."
                     " Return a JSON object with 'ok' (boolean) and 'reason' (string)."
                 )
 
@@ -379,7 +384,7 @@ class LocalLLMClient:
         print(text)
 
         try:
-            parsed = json.loads(text)
+            parsed = json.loads(text, strict=False)
             print(f"\n[{role.upper()}] <<< LLM PARSED JSON:")
             print(json.dumps(parsed, indent=2))
             if isinstance(parsed, dict):

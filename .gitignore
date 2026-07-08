@@ -20,3 +20,5 @@ graphify-out/
 # Agent state
 state/
 tests_temp/
+
+tests/out/

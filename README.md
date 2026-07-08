@@ -113,19 +113,47 @@ The test suite has been modularized from a single monolithic file into individua
 
 ### How to Run the Tests
 
-Make sure your virtual environment is active before running tests.
+You can run the tests by either activating the virtual environment first, or by calling the executables directly from the virtual environment path.
 
-*   **Run the entire test suite:**
+#### Option A: Activate Virtual Environment First (Recommended)
+1. **Activate the virtual environment:**
+   * **On macOS/Linux:**
+     ```bash
+     source .venv/bin/activate
+     ```
+   * **On Windows (PowerShell/CMD):**
+     ```powershell
+     .venv\Scripts\activate
+     ```
+2. **Run your tests:**
+   * Run the entire suite:
+     ```bash
+     pytest
+     ```
+   * Run programmatically via the master entry point:
+     ```bash
+     python3 tests/test_all.py
+     ```
+
+#### Option B: Run Directly (Without Activating)
+If you don't want to activate the virtual environment, you can run tests using the local paths to the virtual environment's executables:
+* **On macOS/Linux:**
+  * Run the entire suite:
     ```bash
-    pytest
+    .venv/bin/pytest
     ```
-*   **Run a specific test aspect (e.g., Safety & Tools):**
+  * Run programmatically via the master entry point:
     ```bash
-    pytest tests/test_tools_safety.py
+    .venv/bin/python3 tests/test_all.py
     ```
-*   **Run programmatically via the master entry point:**
-    ```bash
-    python tests/test_all.py
+* **On Windows:**
+  * Run the entire suite:
+    ```powershell
+    .venv\Scripts\pytest
+    ```
+  * Run programmatically via the master entry point:
+    ```powershell
+    .venv\Scripts\python tests/test_all.py
     ```
 
 ---

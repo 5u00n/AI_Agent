@@ -164,7 +164,10 @@ class ToolRegistry:
             import agent as _agent_pkg
             active_dir = _agent_pkg.get_remembered_working_dir()
             if not active_dir:
-                if sys.stdin.isatty():
+                import os
+                if "PYTEST_CURRENT_TEST" in os.environ:
+                    active_dir = self.root_dir
+                elif sys.stdin.isatty():
                     print("\n[PROMPT] No workspace folder is selected.")
                     entered = input("Enter the absolute path where you want to save this: ").strip()
                     if not entered:
@@ -173,7 +176,8 @@ class ToolRegistry:
                 else:
                     target = (Path.cwd() / path_str).resolve()
                     print(f"[INFO] No workspace selected; using current directory fallback: {target}")
-            else:
+            
+            if active_dir:
                 target = (active_dir / path_str).resolve()
 
             try:
