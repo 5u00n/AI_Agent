@@ -8,7 +8,7 @@ llm:
   model_executor: qwen/qwen3-coder-30b
   model_verifier: qwen/qwen3-coder-30b
   transport: openai_compatible
-  max_tokens: 4096
+  max_tokens: 32000
 budgets:
   max_steps: 30
   max_runtime_minutes: 60
@@ -33,7 +33,7 @@ test_policy:
   delete_tests_after_task: true
   keep_tests_when_user_requests: true
   test_location_strategy: tests_temp
-  max_test_fix_attempts: 2
+  max_test_fix_attempts: 4
   test_runner_by_mode:
     coding: python
     research: python

@@ -1,6 +1,7 @@
 from pathlib import Path
 import os
 import sys
+import sqlite3
 
 import pytest
 
@@ -464,3 +465,299 @@ while True:
 
     assert out["ok"] is True
     assert "echoTool" in str(out)
+
+
+def test_write_birds_and_animals_html_page(tmp_path: Path) -> None:
+    cfg = AgentConfig.default(root_dir=tmp_path)
+    cfg.llm.transport = 'stub'
+    engine = AgentEngine(cfg, root_dir=tmp_path)
+    loop = PlannerExecutorVerifier(engine)
+
+    result = loop.run("write a beautiful html page about birds and animals")
+
+    assert result["status"] == "done"
+    assert (tmp_path / "birds_animals.html").exists()
+    content = (tmp_path / "birds_animals.html").read_text(encoding="utf-8")
+    assert "Birds and Animals" in content
+
+
+def test_workspace_tools(tmp_path: Path, monkeypatch) -> None:
+    cfg = AgentConfig.default(root_dir=tmp_path)
+    cfg.llm.transport = 'stub'
+    engine = AgentEngine(cfg, root_dir=tmp_path)
+
+    # 1. Test set_working_directory
+    subdir = tmp_path / "subdir"
+    subdir.mkdir()
+    
+    remembered_path = []
+    def mock_save(path):
+        remembered_path.append(path)
+    def mock_get():
+        return remembered_path[-1] if remembered_path else None
+
+    monkeypatch.setattr("agent.save_remembered_working_dir", mock_save)
+    monkeypatch.setattr("agent.get_remembered_working_dir", mock_get)
+
+    res = engine.tools.call("set_working_directory", {"path": str(subdir)})
+    assert res["ok"] is True
+    assert mock_get() == subdir
+    assert engine.tools.root_dir == subdir
+
+    # 2. Test create_file_or_folder inside working directory
+    res2 = engine.tools.call("create_file_or_folder", {"path": "test.txt", "is_folder": False, "content": "hello workspace"})
+    assert res2["ok"] is True
+    assert (subdir / "test.txt").exists()
+    assert (subdir / "test.txt").read_text() == "hello workspace"
+
+    # 3. Test create_file_or_folder with folders
+    res3 = engine.tools.call("create_file_or_folder", {"path": "nested_dir", "is_folder": True})
+    assert res3["ok"] is True
+    assert (subdir / "nested_dir").is_dir()
+
+    # 4. Test when no working directory is selected and it falls back to cwd
+    monkeypatch.setattr("agent.get_remembered_working_dir", lambda: None)
+    res4 = engine.tools.call("create_file_or_folder", {"path": "fallback.txt", "is_folder": False, "content": "hello fallback"})
+    assert res4["ok"] is True
+    assert (Path.cwd() / "fallback.txt").exists()
+    
+    # Cleanup fallback file
+    if (Path.cwd() / "fallback.txt").exists():
+        (Path.cwd() / "fallback.txt").unlink()
+
+
+def test_research_goal(tmp_path: Path) -> None:
+    cfg = AgentConfig.default(root_dir=tmp_path)
+    cfg.llm.transport = 'stub'
+    engine = AgentEngine(cfg, root_dir=tmp_path)
+    loop = PlannerExecutorVerifier(engine)
+
+    result = loop.run("Research deep learning history")
+
+    assert result["status"] == "done"
+    assert (tmp_path / "deep_learning_research.txt").exists()
+    content = (tmp_path / "deep_learning_research.txt").read_text(encoding="utf-8")
+    assert "McCulloch-Pitts" in content
+
+
+def test_write_content_goal(tmp_path: Path) -> None:
+    cfg = AgentConfig.default(root_dir=tmp_path)
+    cfg.llm.transport = 'stub'
+    engine = AgentEngine(cfg, root_dir=tmp_path)
+    loop = PlannerExecutorVerifier(engine)
+
+    result = loop.run("Write a blog post about artificial intelligence in education")
+
+    assert result["status"] == "done"
+    assert (tmp_path / "ai_education_blog.md").exists()
+    content = (tmp_path / "ai_education_blog.md").read_text(encoding="utf-8")
+    assert "personalizing learning" in content
+
+
+def test_additional_native_tools(tmp_path: Path) -> None:
+    cfg = AgentConfig.default(root_dir=tmp_path)
+    cfg.llm.transport = 'stub'
+    engine = AgentEngine(cfg, root_dir=tmp_path)
+
+    # 1. Test copy_file
+    src = tmp_path / "source.txt"
+    src.write_text("hello copy", encoding="utf-8")
+    res = engine.tools.call("copy_file", {"src": "source.txt", "dest": "dest.txt"})
+    assert res["ok"] is True
+    assert (tmp_path / "dest.txt").exists()
+    assert (tmp_path / "dest.txt").read_text(encoding="utf-8") == "hello copy"
+
+    # 2. Test edit_file
+    res2 = engine.tools.call("edit_file", {"path": "dest.txt", "content": "updated hello"})
+    assert res2["ok"] is True
+    assert (tmp_path / "dest.txt").read_text(encoding="utf-8") == "updated hello"
+
+    # 3. Test rename_file
+    res3 = engine.tools.call("rename_file", {"src": "dest.txt", "dest": "renamed.txt"})
+    assert res3["ok"] is True
+    assert not (tmp_path / "dest.txt").exists()
+    assert (tmp_path / "renamed.txt").exists()
+    assert (tmp_path / "renamed.txt").read_text(encoding="utf-8") == "updated hello"
+
+    # 4. Test view_page
+    res4 = engine.tools.call("view_page", {"path": "renamed.txt"})
+    assert res4["ok"] is True
+    assert "http://127.0.0.1:8000/workspace/renamed.txt" in res4["url"]
+
+
+def test_delete_run(tmp_path: Path) -> None:
+    cfg = AgentConfig.default(root_dir=tmp_path)
+    cfg.llm.transport = 'stub'
+    engine = AgentEngine(cfg, root_dir=tmp_path)
+    
+    run_id = engine.store.create_run("delete test run")
+    engine.store.add_message(run_id, "user", "delete test run")
+    
+    # Verify it exists
+    runs = engine.store.list_runs()
+    assert any(r["run_id"] == run_id for r in runs)
+    
+    # Delete it
+    engine.store.delete_run(run_id)
+    
+    # Verify it is gone
+    runs_after = engine.store.list_runs()
+    assert not any(r["run_id"] == run_id for r in runs_after)
+
+
+def test_fox_rabbit_story(tmp_path: Path) -> None:
+    cfg = AgentConfig.default(root_dir=tmp_path)
+    cfg.llm.transport = 'stub'
+    engine = AgentEngine(cfg, root_dir=tmp_path)
+    loop = PlannerExecutorVerifier(engine)
+
+    result = loop.run("write a story of a fox and rabbit")
+
+    assert result["status"] == "done"
+    assert (tmp_path / "fox_rabbit_story.txt").exists()
+    content = (tmp_path / "fox_rabbit_story.txt").read_text(encoding="utf-8")
+    assert "fox" in content and "rabbit" in content
+
+
+def test_hello_chat(tmp_path: Path) -> None:
+    cfg = AgentConfig.default(root_dir=tmp_path)
+    cfg.llm.transport = 'openai_compatible'
+    engine = AgentEngine(cfg, root_dir=tmp_path)
+    loop = PlannerExecutorVerifier(engine)
+
+    result = loop.run("hi, how are you")
+
+    assert result["status"] == "done"
+    assert "doing well" in result["reason"]
+
+
+def test_research_mammal(tmp_path: Path) -> None:
+    cfg = AgentConfig.default(root_dir=tmp_path)
+    cfg.llm.transport = 'stub'
+    engine = AgentEngine(cfg, root_dir=tmp_path)
+    loop = PlannerExecutorVerifier(engine)
+
+    result = loop.run("research on largest mammal")
+
+    assert result["status"] == "done"
+    assert (tmp_path / "mammal_research.txt").exists()
+    content = (tmp_path / "mammal_research.txt").read_text(encoding="utf-8")
+    assert "blue whale" in content
+
+
+def test_birds_slider_page(tmp_path: Path) -> None:
+    cfg = AgentConfig.default(root_dir=tmp_path)
+    cfg.llm.transport = 'stub'
+    engine = AgentEngine(cfg, root_dir=tmp_path)
+    loop = PlannerExecutorVerifier(engine)
+
+    result = loop.run("make beautiful web page for most beautiful birds in the world , make the website with slider")
+
+    assert result["status"] == "done"
+    assert (tmp_path / "birds_slider.html").exists()
+    content = (tmp_path / "birds_slider.html").read_text(encoding="utf-8")
+    assert "Most Beautiful Birds" in content and "slider" in content
+
+
+def test_stop_run(tmp_path: Path) -> None:
+    cfg = AgentConfig.default(root_dir=tmp_path)
+    cfg.llm.transport = 'stub'
+    engine = AgentEngine(cfg, root_dir=tmp_path)
+    loop = PlannerExecutorVerifier(engine)
+
+    run_id = engine.store.create_run("cancelled task", status="running")
+    engine.store.set_run_status(run_id, "stopped")
+
+    result = loop.run("cancelled task", run_id=run_id)
+    assert result["status"] == "blocked"
+    assert "stopped" in result["reason"].lower()
+
+
+def test_update_run_goal(tmp_path: Path) -> None:
+    cfg = AgentConfig.default(root_dir=tmp_path)
+    cfg.llm.transport = 'stub'
+    engine = AgentEngine(cfg, root_dir=tmp_path)
+    
+    run_id = engine.store.create_run("old goal")
+    engine.store.add_message(run_id, "user", "old goal")
+    
+    with sqlite3.connect(engine.store.db_path) as conn:
+        conn.execute("UPDATE runs SET goal = ? WHERE run_id = ?", ("new goal", run_id))
+        conn.execute("UPDATE messages SET content = ? WHERE run_id = ?", ("new goal", run_id))
+    
+    runs = engine.store.list_runs()
+    assert any(r["run_id"] == run_id and r["goal"] == "new goal" for r in runs)
+
+
+def test_dynamic_tool_registration(tmp_path: Path) -> None:
+    cfg = AgentConfig.default(root_dir=tmp_path)
+    cfg.llm.transport = 'stub'
+    engine = AgentEngine(cfg, root_dir=tmp_path)
+
+    tools_dir = tmp_path / "custom_tools"
+    tools_dir.mkdir(exist_ok=True)
+    tool_code = """
+def run(args: dict) -> dict:
+    n = int(args.get("n", 0))
+    return {"ok": True, "result": n * 10}
+"""
+    (tools_dir / "multiply_ten.py").write_text(tool_code, encoding="utf-8")
+
+    assert engine.tools.get_custom_tool_names() == ["multiply_ten"]
+
+    res = engine.tools.call("multiply_ten", {"n": 8})
+    assert res["ok"] is True
+    assert res["result"] == 80
+
+
+def test_skills_listing(tmp_path: Path) -> None:
+    cfg = AgentConfig.default(root_dir=tmp_path)
+    cfg.llm.transport = 'stub'
+    engine = AgentEngine(cfg, root_dir=tmp_path)
+
+    skills_dir = tmp_path / ".agents" / "skills" / "translator"
+    skills_dir.mkdir(parents=True, exist_ok=True)
+    skill_md = """---
+name: Spanish Translator
+description: Expert Spanish translator
+---
+# Instructions
+Always translate inputs to Spanish.
+"""
+    (skills_dir / "SKILL.md").write_text(skill_md, encoding="utf-8")
+
+    skills = []
+    skills_root = tmp_path / ".agents" / "skills"
+    if skills_root.exists():
+        for p in skills_root.iterdir():
+            if p.is_dir() and (p / "SKILL.md").exists():
+                content = (p / "SKILL.md").read_text(encoding="utf-8")
+                name = p.name
+                desc = ""
+                for line in content.splitlines():
+                    if line.strip().startswith("name:"):
+                        name = line.split(":", 1)[1].strip().strip('"').strip("'")
+                    elif line.strip().startswith("description:"):
+                        desc = line.split(":", 1)[1].strip().strip('"').strip("'")
+                skills.append({"name": name, "description": desc, "folder": p.name})
+
+    assert len(skills) == 1
+    assert skills[0]["name"] == "Spanish Translator"
+    assert skills[0]["description"] == "Expert Spanish translator"
+    assert skills[0]["folder"] == "translator"
+
+
+def test_llm_connection_failure(tmp_path: Path) -> None:
+    cfg = AgentConfig.default(root_dir=tmp_path)
+    cfg.llm.transport = 'openai_compatible'
+    cfg.llm.base_url_lmstudio = 'http://127.0.0.1:19999/v1'
+    cfg.llm.base_url_ollama = 'http://127.0.0.1:19999'
+    
+    engine = AgentEngine(cfg, root_dir=tmp_path)
+    loop = PlannerExecutorVerifier(engine)
+    
+    import pytest
+    with pytest.raises(RuntimeError) as exc_info:
+        loop.run("test task")
+        
+    assert "Connection to LM Studio/LLM failed" in str(exc_info.value)
